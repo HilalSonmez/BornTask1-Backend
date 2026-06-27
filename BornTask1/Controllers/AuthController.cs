@@ -15,12 +15,12 @@ namespace BornTask1.Controllers //Login Register Forgot Password işlemlerini bu
     [Route("api/[controller]")]
     [ApiController]
     public class AuthController : ControllerBase
-    {
+    { //readonly içine yalnızca baslangıcta deger atancak
         private readonly ApplicationDbContext _context; // veritabanına erişmek için yazdım
 
         private readonly IConfiguration _configuration; // appsettings.json dosyasındaki ayarlara erişmek için yazdım
         private readonly MailService _mailService; //mail gönderme işlemleri için yazdım nesne olusturdum
-        public AuthController(ApplicationDbContext context, IConfiguration configuration, MailService mailService)
+        public AuthController(ApplicationDbContext context, IConfiguration configuration, MailService mailService) //constructor yapısı bır sınıftan nesne olusturuldugu anda çalısan metot bu demek oluyorkı auth controllerın calısması ıcın 3 seye ıhtıyac var
         {
             _context = context; //_context veritabanı alanıydı context dışardan gelen nesneydi onu alanın içine yerleştirdim (Kendime Not)
             _configuration = configuration; //uygulama ayarlarına erişmek için configuration nesnesini alanın içine yerleştirdim (Kendime Not)
@@ -29,19 +29,25 @@ namespace BornTask1.Controllers //Login Register Forgot Password işlemlerini bu
         }
 
 
-        [HttpGet]
+        
         [HttpPost("register")]
         public IActionResult Register(RegisterDto dto)
+
         {
             /* bu kısmı dtolarda otomatık kontrol ettırdık if (string.IsNullOrWhiteSpace(dto.Email) || string.IsNullOrWhiteSpace(dto.Password))
              {
                  return BadRequest("Email ve şifre girmek zorunludur");
              }*/
+
+            
             var existingUser = _context.Users.FirstOrDefault(x => x.Email == dto.Email);//swaggerdan gelen maille tablodakı maili karsılastırdım
 
             if (existingUser != null)
             {
-                return BadRequest("Bu E-mail adresi zaten kayıtlı");
+                return BadRequest(new
+                {
+                    message = "Bu E-mail adresi zaten kayıtlı"
+                });
             }
 
             
@@ -59,18 +65,29 @@ namespace BornTask1.Controllers //Login Register Forgot Password işlemlerini bu
 
             _context.SaveChanges();// bu veritabanına kaydedıyor. Bunun nedenı toplu olarak kaydetmekmiş devamlı baglantı kurup kaydetmıyormus !!!!
 
-            _mailService.SendEmail(
-             user.Email, //maili göndermek istediğim kullanıcı maili
-            "Email Doğrulama", //mail konusu
-            $"Doğrulama kodunuz: {user.EmailConfirmationCode}"); //mail içeriği doğrulama kodunu gönderdim
+            try // appsetting.jsona mail bilgileri girilmediyse program durmasın dıye
+            {
+                _mailService.SendEmail(
+                 user.Email, //maili göndermek istediğim kullanıcı maili
+                "Email Doğrulama", //mail konusu
+                $"Doğrulama kodunuz: {user.EmailConfirmationCode}"); //mail içeriği doğrulama kodunu gönderdim
+                             
+            }
+            catch (Exception) 
+            {
 
+                return BadRequest(new
+                {
+                    Message = "Kayıt oluşturuldu ancak doğrulama e-postası gönderilemedi. Lütfen sistem yöneticisi ile iletişime geçiniz."
+                });
+            }
             return Ok(new
             {
                 Message = "Kullanıcı başarıyla eklendi. Doğrulama kodu e-mail adresinize gönderildi."
             });
 
-
         }
+
         [HttpPost("login")]
 
         public IActionResult Login(LoginDto dto)
@@ -146,8 +163,22 @@ namespace BornTask1.Controllers //Login Register Forgot Password işlemlerini bu
 
             _context.SaveChanges();
 
-            _mailService.SendEmail(user.Email, "Şifre Sıfırlama", $"Şifre sıfırlama kodunuz:{user.PasswordResetCode}");
 
+
+            try //appsettıngte mail bilgileri yazılmazsa hata doncek
+            {
+                _mailService.SendEmail(
+                    user.Email,
+                    "Şifre Sıfırlama",
+                    $"Şifre sıfırlama kodunuz: {user.PasswordResetCode}");
+            }
+            catch (Exception)
+            {
+                return BadRequest(new
+                {
+                    Message = "Şifre sıfırlama kodu oluşturuldu ancak e-posta gönderilemedi. Lütfen sistem yöneticisi ile iletişime geçiniz."
+                });
+            }
 
             return Ok(new
             {
